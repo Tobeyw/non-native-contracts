@@ -21,11 +21,14 @@ namespace Neo.SmartContract
     {
         public delegate void OnTransferDelegate(UInt160 from, UInt160 to, BigInteger amount, ByteString tokenId);
         public delegate void OnSetAdminDelegate(string name, UInt160 oldAdmin, UInt160 newAdmin);
+        public delegate void OnSetExpirationDelegate(string name, ulong oldExpiration, ulong newExpiration);
 
         [DisplayName("Transfer")]
         public static event OnTransferDelegate OnTransfer;
         [DisplayName("SetAdmin")]
         public static event OnSetAdminDelegate OnSetAdmin;
+        [DisplayName("SetExpiration")]
+        public static event OnSetExpirationDelegate OnSetExpiration;
 
         private const byte Prefix_TotalSupply = 0x00;
         private const byte Prefix_Balance = 0x01;
@@ -277,13 +280,16 @@ namespace Neo.SmartContract
                 Runtime.BurnGas(price * years);
             StorageMap nameMap = new(Storage.CurrentContext, Prefix_Name);
             ByteString tokenKey = GetKey(name);
-            NameState token = (NameState)StdLib.Deserialize(nameMap[tokenKey]);
+            NameState token = (NameState)StdLib.Deserialize(nameMap[tokenKey]);           
             token.EnsureNotExpired();
+            ulong old = token.Expiration;
             token.Expiration += OneYear * years;
             if (token.Expiration > Runtime.Time + TenYears)
                 throw new ArgumentException("You can't renew a domain name for more than 10 years in total.");
             nameMap[tokenKey] = StdLib.Serialize(token);
+            OnSetExpiration(name, old, token.Expiration);
             return token.Expiration;
+
         }
 
         public static void SetAdmin(string name, UInt160 admin)
